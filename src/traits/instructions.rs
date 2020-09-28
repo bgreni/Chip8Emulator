@@ -1,29 +1,34 @@
 use crate::interpreter::Interpreter;
-use crate::drivers::input::{Inputs, val_in_keys};
+use crate::drivers::input::Inputs;
+use crate::drivers::screen::Screen;
 use rand::Rng;
 use std::io;
 use std::io::stdin;
 use std::io::Read;
+use piston::input::Button;
 
 
 pub trait Helpers {
-    fn get_reg(&mut self, index: usize) -> u8;
+    fn get_reg(&self, index: usize) -> u8;
     fn set_reg(&mut self, index: usize, val: u8);
     fn set_vf(&mut self);
     fn unset_vf(&mut self);
     fn set_i(&mut self, val: u16);
-    fn get_i(&mut self) -> u16;
+    fn get_i(&self) -> u16;
     fn handle_vf(&mut self, condition: bool);
     fn inc_pc(&mut self);
-    fn get_pc(&mut self) -> u16;
-    fn get_dt(&mut self) -> u8;
+    fn get_pc(&self) -> u16;
+    fn get_dt(&self) -> u8;
     fn set_dt(&mut self, val: u8);
-    fn get_st(&mut self) -> u8;
+    fn get_st(&self) -> u8;
     fn set_st(&mut self, val: u8);
+    fn write_mem(&mut self, loc: usize, val: u8);
+    fn read_mem(&mut self, loc: usize) -> u8;
+    fn to_digits(&mut self, num: usize) -> Vec<usize>;
 }
 
 impl Helpers for Interpreter {
-    fn get_reg(&mut self, index: usize) -> u8 {
+    fn get_reg(&self, index: usize) -> u8 {
         return self.registers.gen_regs[index].clone();
     }
 
@@ -43,7 +48,7 @@ impl Helpers for Interpreter {
         self.registers.i = val;
     }
 
-    fn get_i(&mut self) -> u16 {
+    fn get_i(&self) -> u16 {
         return self.registers.i;
     }
 
@@ -59,11 +64,11 @@ impl Helpers for Interpreter {
         self.registers.pc += 2;
     }
 
-    fn get_pc(&mut self) -> u16 {
+    fn get_pc(&self) -> u16 {
         return self.registers.pc;
     }
 
-    fn get_dt(&mut self) -> u8 {
+    fn get_dt(&self) -> u8 {
         return self.registers.dt;
     }
 
@@ -71,51 +76,71 @@ impl Helpers for Interpreter {
         self.registers.dt = val;
     }
 
-    fn get_st(&mut self) -> u8 {
+    fn get_st(&self) -> u8 {
         return self.registers.st;
     }
 
     fn set_st(&mut self, val: u8) {
         self.registers.st = val;
     }
+
+    fn write_mem(&mut self, loc: usize, val: u8) {
+        self.memory.memory[loc] = val;
+    }
+
+    fn read_mem(&mut self, loc: usize) -> u8 {
+        return self.memory.memory[loc];
+    }
+
+    fn to_digits(&mut self, num: usize) -> Vec<usize> {
+        let mut vec = vec![0usize; 3];
+        let digs = num.to_string()
+            .chars()
+            .map(|d| d.to_digit(10).unwrap() as usize)
+            .collect::<Vec<usize>>();
+        for i in digs.len() - 1..=0 {
+            vec[i] = digs[i].clone();
+        }
+        return vec;
+    }
 }
 
 
 pub trait Instructions {
-    // fn cls();
-    fn ret();
-    fn jp(&mut self, address: u16);
-    fn jp_add(&mut self, address: u16);
-    // fn call(address: u16);
-    fn seb(&mut self, regx: usize, byte: u8);
-    fn sneb(&mut self, regx: usize, byte: u8);
-    fn sne(&mut self, regx: usize, regy: usize);
-    fn se(&mut self, regx: usize, regy: usize);
-    fn ldb(&mut self, regx: usize, byte: u8);
-    fn ld(&mut self, regx: usize, regy: usize);
-    // fn ld_sprite(register: u8);
-    // fn ld_bcd(register: u8);
-    // fn copy_reg_mem(limit_reg: u8);
-    // fn read_reg_mem(limit_reg: u8);
-    fn ldi(&mut self, val: u16);
-    fn ldt(&mut self, regx: usize);
-    fn sdt(&mut self, regx: usize);
-    fn sst(&mut self, regx: usize);
-    fn ldk(&mut self, regx: usize);
-    fn addb(&mut self, regx: usize, byte: u8);
-    fn add(&mut self, regx: usize, regy: usize);
-    fn addi(&mut self, regx: usize);
-    fn sub(&mut self, regx: usize, regy: usize);
-    fn subn(&mut self, regx: usize, regy: usize);
-    fn or(&mut self, regx: usize, regy: usize);
-    fn and(&mut self, regx: usize, regy: usize);
-    fn xor(&mut self, regx: usize, regy: usize);
-    fn shr(&mut self, regx: usize);
-    fn shl(&mut self, regx: usize);
-    fn rnd(&mut self, regx: usize, byte: u8);
-    // fn drw(register1: u8, register2: u8, nibble: u8);
-    fn skp(&mut self, regx: usize, input_driver: &Inputs);
-    fn sknp(&mut self, regx: usize, input_driver: &Inputs);
+    fn cls(&mut self, screen: &mut Screen);                 // 00E0
+    fn ret(&mut self);                                      // 00EE
+    fn jp(&mut self, address: u16);                         // 1nnn
+    fn jp_add(&mut self, address: u16);                     // Bnnn
+    fn call(&mut self, address: u16);                       // 2nnn
+    fn seb(&mut self, regx: usize, byte: u8);               // 3xkk
+    fn sneb(&mut self, regx: usize, byte: u8);              // 4xkk
+    fn sne(&mut self, regx: usize, regy: usize);            // 9xy0
+    fn se(&mut self, regx: usize, regy: usize);             // 5xy0
+    fn ldb(&mut self, regx: usize, byte: u8);               // 6xkk
+    fn ld(&mut self, regx: usize, regy: usize);             // 8xy0
+    fn ld_sprite(&mut self, regx: usize);                   // Fx29
+    fn ld_bcd(&mut self, regx: usize);                      // Fx33
+    fn copy_reg_mem(&mut self, limit_reg: usize);           // Fx55
+    fn read_reg_mem(&mut self, limit_reg: usize);           // Fx65
+    fn ldi(&mut self, val: u16);                            // Annn
+    fn ldt(&mut self, regx: usize);                         // Fx07
+    fn sdt(&mut self, regx: usize);                         // Fx15
+    fn sst(&mut self, regx: usize);                         // Fx18
+    fn ldk(&mut self, regx: usize);                         // Fx0A
+    fn addb(&mut self, regx: usize, byte: u8);              // 7xkk
+    fn add(&mut self, regx: usize, regy: usize);            // 8xy4
+    fn addi(&mut self, regx: usize);                        // Fx1E
+    fn sub(&mut self, regx: usize, regy: usize);            // 8xy5
+    fn subn(&mut self, regx: usize, regy: usize);           // 8xy7
+    fn or(&mut self, regx: usize, regy: usize);             // 8xy1
+    fn and(&mut self, regx: usize, regy: usize);            // 8xy2
+    fn xor(&mut self, regx: usize, regy: usize);            // 8xy3
+    fn shr(&mut self, regx: usize);                         // 8xy6
+    fn shl(&mut self, regx: usize);                         // 8xyE
+    fn rnd(&mut self, regx: usize, byte: u8);               // Cxkk
+    fn drw(&mut self, regx: usize, regy: usize, sprite_height: u8, screen: &mut Screen);// Dxyn
+    fn skp(&mut self, regx: usize, input_driver: &Inputs, key: Option<Button>);  // Ex9E
+    fn sknp(&mut self, regx: usize, input_driver: &Inputs, key: Option<Button>); // ExA1
 }
 
 
@@ -124,6 +149,7 @@ impl Instructions for Interpreter {
     fn addb(&mut self, regx: usize, byte: u8) {
         let regx_val = self.get_reg(regx);
         self.set_reg(regx, regx_val.wrapping_add(byte));
+        self.inc_pc();
     }
 
     /// Vx = Vx + Vy
@@ -132,6 +158,7 @@ impl Instructions for Interpreter {
         let result: u16 = self.get_reg(regx) as u16 + self.get_reg(regy) as u16;
         self.handle_vf(result > u8::MAX as u16);
         self.set_reg(regx, result as u8);
+        self.inc_pc();
     }
 
     /// I = Vx + I
@@ -139,6 +166,7 @@ impl Instructions for Interpreter {
         let i_val = self.get_i();
         let regx_val = self.get_reg(regx) as u16;
         self.set_i(i_val.wrapping_add(regx_val));
+        self.inc_pc();
     }
 
     /// Vx = Vx - Vy
@@ -148,6 +176,7 @@ impl Instructions for Interpreter {
         let regy_val = self.get_reg(regy);
         self.handle_vf(regx_val > regy_val);
         self.set_reg(regx, regx_val.wrapping_sub(regy_val));
+        self.inc_pc();
     }
 
     /// Vx = Vy - Vx
@@ -157,7 +186,7 @@ impl Instructions for Interpreter {
         let regy_val = self.get_reg(regy);
         self.handle_vf(regy_val > regx_val);
         self.set_reg(regx, regy_val.wrapping_sub(regx_val));
-
+        self.inc_pc();
     }
 
     /// Vx = Vx or Vy (bitwise)
@@ -165,6 +194,7 @@ impl Instructions for Interpreter {
         let regx_val = self.get_reg(regx);
         let regy_val = self.get_reg(regy);
         self.set_reg(regx, regx_val | regy_val);
+        self.inc_pc();
     }
 
     /// Vx = Vx and Vy (bitwise)
@@ -172,6 +202,7 @@ impl Instructions for Interpreter {
         let regx_val = self.get_reg(regx);
         let regy_val = self.get_reg(regy);
         self.set_reg(regx, regx_val & regy_val);
+        self.inc_pc();
     }
 
     /// Vx = Vx xor Vy (bitwise)
@@ -179,6 +210,7 @@ impl Instructions for Interpreter {
         let regx_val = self.get_reg(regx);
         let regy_val = self.get_reg(regy);
         self.set_reg(regx, regx_val ^ regy_val);
+        self.inc_pc();
     }
 
     /// Vx = Vx / 2
@@ -187,6 +219,7 @@ impl Instructions for Interpreter {
         let regx_val = self.get_reg(regx);
         self.handle_vf(regx_val & 0x1 == 1);
         self.set_reg(regx, regx_val >> 1);
+        self.inc_pc();
     }
 
     /// Vx = Vx * 2
@@ -195,6 +228,7 @@ impl Instructions for Interpreter {
         let regx_val = self.get_reg(regx);
         self.handle_vf(regx_val & 0x80 == 0x80);
         self.set_reg(regx, regx_val << 1);
+        self.inc_pc();
     }
 
     /// inc pc if Vx == byte
@@ -202,6 +236,7 @@ impl Instructions for Interpreter {
         if self.get_reg(regx) == byte {
             self.inc_pc();
         }
+        self.inc_pc();
     }
 
     /// inc pc if Vx != byte
@@ -209,6 +244,7 @@ impl Instructions for Interpreter {
         if self.get_reg(regx) != byte {
             self.inc_pc();
         }
+        self.inc_pc();
     }
 
     /// inc pc if Vx != Vy
@@ -218,6 +254,7 @@ impl Instructions for Interpreter {
         if regx_val != regy_val {
             self.inc_pc();
         }
+        self.inc_pc();
     }
 
     /// inc pc if Vx == Vy
@@ -226,71 +263,87 @@ impl Instructions for Interpreter {
         let regy_val = self.get_reg(regy);
         if regx_val == regy_val {
             self.inc_pc();
-        }   
+        }
+        self.inc_pc();
     }
 
     /// set Vx = byte
     fn ldb(&mut self, regx: usize, byte: u8) {
         self.set_reg(regx, byte);
+        self.inc_pc();
     }
 
     /// set Vx = Vy
     fn ld(&mut self, regx: usize, regy: usize) {
         let regy_val = self.get_reg(regy);
         self.set_reg(regx, regy_val);
+        self.inc_pc();
     }
 
     /// I = val
     fn ldi(&mut self, val: u16) {
         self.set_i(val);
+        self.inc_pc();
     }
 
     /// Vx = DT
     fn ldt(&mut self, regx: usize) {
         let dt_val = self.get_dt();
         self.set_reg(regx, dt_val);
+        self.inc_pc();
     }
 
     /// DT = Vx
     fn sdt(&mut self, regx: usize) {
         let regx_val = self.get_reg(regx);
         self.set_dt(regx_val);
+        self.inc_pc();
     }
 
     /// ST = Vx
     fn sst(&mut self, regx: usize) {
         let regx_val = self.get_reg(regx);
         self.set_st(regx_val);
+        self.inc_pc();
     }
 
     /// gen rand number [0...255]
     /// Vx = rand & byte
     fn rnd(&mut self, regx: usize, byte: u8) {
         self.set_reg(regx, rand::thread_rng().gen::<u8>() & byte);
+        self.inc_pc();
     }
 
     /// Wait for keypress and store value of key in Vx
     fn ldk(&mut self, regx: usize) {
+        println!("waiting for key");
         self.wait_for_key = true;
         self.key_reg = regx;
+        self.inc_pc();
     }
 
     /// Inc pc if key value held in Vx is pressed
-    fn skp(&mut self, regx: usize, input_driver: &Inputs) {
-        let keys = input_driver.check_key_presses();
-        let target_key: usize = self.get_reg(regx) as usize;
-        if val_in_keys(&keys, target_key) {
-            self.inc_pc();
+    fn skp(&mut self, regx: usize, input_driver: &Inputs, key: Option<Button>) {
+        let key = input_driver.check_key_presses(key);
+        let target_key = self.get_reg(regx);
+        if key != None {
+            if target_key == key.unwrap() {
+                self.inc_pc();
+            }
         }
+        self.inc_pc();
     }
 
     /// Inc pc if key value held in Vx is not pressed
-    fn sknp(&mut self, regx: usize, input_driver: &Inputs) {
-        let keys = input_driver.check_key_presses();
-        let target_key: usize = self.get_reg(regx) as usize;
-        if !val_in_keys(&keys, target_key) {
-            self.inc_pc();
+    fn sknp(&mut self, regx: usize, input_driver: &Inputs, key: Option<Button>) {
+        let key = input_driver.check_key_presses(key);
+        let target_key = self.get_reg(regx);
+        if key != None {
+            if target_key == key.unwrap() {
+                self.inc_pc();
+            }
         }
+        self.inc_pc();
     }
 
     /// Set PC = address
@@ -302,6 +355,87 @@ impl Instructions for Interpreter {
     fn jp_add(&mut self, address: u16) {
         self.registers.pc = address + self.get_reg(0) as u16;
     }
+
+    /// Set PC to address on top of stack
+    /// decrement stack pointer
+    fn ret(&mut self) {
+        let ret_add = self.pop_stack();
+        self.registers.pc = ret_add;
+    }
+
+    /// Put current PC on top of stack
+    /// Set PC to new address
+    fn call(&mut self, address: u16) {
+        self.push_stack(self.registers.pc);
+        self.registers.pc = address;
+    }
+
+    /// clear the screen
+    fn cls(&mut self, screen: &mut Screen) {
+        screen.clear_screen();
+        self.inc_pc();
+    }
+
+    /// copy values of V0..V[limit_reg] into memory 
+    /// locations starting at the value in I
+    fn copy_reg_mem(&mut self, limit_reg: usize){
+        let mem_start = self.get_i() as usize;
+        for i in 0..limit_reg + 1 {
+            let reg = self.get_reg(i);
+            self.write_mem((mem_start + i) as usize, reg);
+        }
+        self.inc_pc();
+    }
+
+    /// read values into V0..V[limit_reg] from
+    /// mem locations starting at value of I
+    fn read_reg_mem(&mut self, limit_reg: usize) {
+        let mem_start = self.get_i() as usize;
+        for i in 0..limit_reg + 1 {
+            let val = self.read_mem((mem_start + i) as usize);
+            self.set_reg(i, val);
+        }
+        self.inc_pc();
+    }
+
+    /// Load the location of a sprite into I
+    fn ld_sprite(&mut self, regx: usize) {
+        let loc = self.get_reg(regx) as u16;
+        self.set_i(loc);
+        self.inc_pc();
+    }
+
+    /// Load BCD repr of Vx into memory locations
+    /// I, I+1, I+2
+    fn ld_bcd(&mut self, regx: usize) {
+        let val = self.get_reg(regx) as u8;
+        let digits = self.to_digits(val as usize);
+        let mem_loc = self.get_i();
+
+        for i in 0..=2 {
+            self.write_mem((mem_loc + i) as usize, digits[i as usize] as u8)
+        }
+        self.inc_pc();
+    }
+
+    fn drw(&mut self, regx: usize, regy: usize, sprite_height: u8, screen: &mut Screen) {
+        self.unset_vf();
+        let start = self.get_i() as usize;
+        let mut sprite = Vec::new();
+
+        for i in 0..sprite_height {
+            sprite.push(self.read_mem(start + 1) as u8);
+        }
+
+        let x = self.get_reg(regx) as usize;
+        let y = self.get_reg(regy) as usize;
+
+        let coll = screen.draw_sprite(x, y, sprite);
+        if coll == 1 {
+            self.set_vf();
+        }
+        self.inc_pc();
+    }
 }
 
 #[cfg(test)]
@@ -312,6 +446,79 @@ mod instruction_tests {
         return Interpreter::new();
     }
 
+    // tests for ld_bcd
+    #[test]
+    fn test_ld_bcd() {
+        let mut inter = get_inter();
+        inter.set_i(0);
+        inter.set_reg(1, 123);
+        inter.ld_bcd(1);
+        for i in 0..3 {
+            assert_eq!(inter.read_mem(i as usize), i + 1);
+        }
+    }
+
+    // tests for ld_sprite
+    #[test]
+    fn test_ld_sprite() {
+        let mut inter = get_inter();
+        inter.set_reg(1, 8);
+        inter.ld_sprite(1);
+        assert_eq!(inter.get_i(), 8);
+    }
+
+    // tests for read_reg_mem
+    #[test]
+    fn test_read_reg_mem() {
+        let mut inter = get_inter();
+        for i in 10..20 {
+            inter.write_mem(i, i as u8);
+        }
+
+        inter.set_i(10);
+        inter.read_reg_mem(9);
+
+        for i in 0..10 {
+            assert_eq!(inter.get_reg(i), (i + 10) as u8);
+        }
+    }
+
+    // tests for copy_reg_mem
+    #[test]
+    fn test_copy_reg_mem() {
+        let mut inter = get_inter();
+        inter.set_i(10);
+        for i in 0..10 {
+            inter.set_reg(i, (i+1) as u8);
+        }
+        inter.copy_reg_mem(9);
+
+        for i in 0..10 {
+            assert_eq!(inter.read_mem(i + 10), (i + 1) as u8);
+        }
+    }
+
+    // tests for call
+    #[test]
+    fn test_call() {
+        let mut inter = get_inter();
+        inter.registers.pc = 10;
+        inter.call(107);
+        assert_eq!(inter.pop_stack(), 10);
+        assert_eq!(inter.registers.pc, 107);
+    }
+
+    // tests for ret
+    #[test]
+    fn test_ret() {
+        let mut inter = get_inter();
+        inter.push_stack(1010);
+        inter.ret();
+        assert_eq!(inter.registers.pc, 1010);
+        assert_eq!(inter.memory.stack.is_empty(), true);
+    }
+
+    // tests for jp_add
     #[test]
     fn test_jp_add() {
         let mut inter = get_inter();

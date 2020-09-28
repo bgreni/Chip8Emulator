@@ -2,15 +2,18 @@
 /// Defines the interface of the interperter, and implements 
 /// all top level functionality
 use crate::hardware::{Registers, Memory};
+use crate::program_handler::ProgramHandler;
 
 const STACK_SIZE_LIMIT: i8 = 31;
 
 #[allow(dead_code)]
 pub struct Interpreter {
     pub registers: Registers,
-    memory: Memory,
+    pub memory: Memory,
     pub wait_for_key: bool,
-    pub key_reg: usize
+    pub key_reg: usize,
+    pub program_handler: ProgramHandler,
+    pub next_op: u16,
 }
 
 
@@ -20,7 +23,9 @@ impl Interpreter {
             registers: Registers::default(),
             memory: Memory::default(),
             wait_for_key: false,
-            key_reg: 0
+            key_reg: 0,
+            program_handler: ProgramHandler::new(),
+            next_op: 0,
         }
     }
 
