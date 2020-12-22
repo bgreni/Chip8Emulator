@@ -100,13 +100,13 @@ impl Chip8Interpreter for Interpreter {
 mod Chip8_tests {
     use super::*;
 
-    #[test]
-    fn test_fetch_instruction() {
-        let mut inter = Interpreter::new();
-        inter.memory.memory[0x200] = 0x23;
-        inter.memory.memory[0x201] = 0x45;
-
-        assert_eq!(inter.fetch_next_instruction(), 0x2345);
-    }
+    // #[test]
+    // fn test_fetch_instruction() {
+    //     let mut inter = Interpreter::new();
+    //     inter.memory.memory[0x200] = 0x23;
+    //     inter.memory.memory[0x201] = 0x45;
+    //
+    //     assert_eq!(inter.fetch_next_instruction(), 0x2345);
+    // }
 
 }

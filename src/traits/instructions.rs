@@ -92,15 +92,21 @@ impl Helpers for Interpreter {
         return self.memory.memory[loc];
     }
 
-    fn to_digits(&mut self, num: usize) -> Vec<usize> {
+    fn to_digits(&mut self, mut num: usize) -> Vec<usize> {
         let mut vec = vec![0usize; 3];
-        let digs = num.to_string()
-            .chars()
-            .map(|d| d.to_digit(10).unwrap() as usize)
-            .collect::<Vec<usize>>();
-        for i in digs.len() - 1..=0 {
-            vec[i] = digs[i].clone();
+        // let digs = num.to_string()
+        //     .chars()
+        //     .map(|d| d.to_digit(10).unwrap() as usize)
+        //     .collect::<Vec<usize>>();
+        // for i in digs.len() - 1..=0 {
+        //     vec[i] = digs[i].clone();
+        // }
+        while num < 0 {
+            let piece = num % 10;
+            vec.push(piece);
+            num /= 10;
         }
+        vec.reverse();
         return vec;
     }
 }
@@ -410,6 +416,7 @@ impl Instructions for Interpreter {
     fn ld_bcd(&mut self, regx: usize) {
         let val = self.get_reg(regx) as u8;
         let digits = self.to_digits(val as usize);
+        println!("{:?}", digits);
         let mem_loc = self.get_i();
 
         for i in 0..=2 {
