@@ -3,6 +3,9 @@
 
 use rand::Rng;
 use std::io::{BufWriter, Read};
+use std::fs::{File, metadata, read};
+use instructions::{RawInstruction, Instruction};
+use instructions::Instruction::*;
 
 /// Size of the RAM in bytes
 const RAM_SIZE: usize = 4096;
@@ -98,5 +101,37 @@ impl Interpreter {
         return inter;
     }
 
-    pub fn load_program(&mut self, )
+    pub fn load_program(&mut self, filename: string) {
+        let read = read(filename).expect("File does not exist");
+
+        let rom_size = read.len();
+        let max_rom_size = RAM_SIZE - PROGRAM_START;
+
+        if rom_size > max_rom_size {
+            panic!("ROM too large");
+        }
+
+        for i in 0..rom_size {
+            self.ram[i + PROGRAM_START] = read[i];
+        }
+    }
+
+    pub fn is_beeping(&self) -> bool {
+        return self.sound_timer > 0;
+    }
+
+    pub fn set_key(&mut self, key: u8) {
+        self.keys[key as usize] = 1;
+        if let Some(pressed) = self.waiting_on_key {
+            self.reg[pressed] = key;
+            self.waiting_on_key = None;
+        }
+    }
+
+    pub fn unset_key(&mut self, key: u8) {
+        self.keys[key as usize] = 0;
+    }
+
+    fn run_op(&mut self, op: &Instruction) -> bool {
+    }
 }
