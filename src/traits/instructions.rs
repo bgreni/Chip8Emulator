@@ -101,7 +101,11 @@ impl Helpers for Interpreter {
         // for i in digs.len() - 1..=0 {
         //     vec[i] = digs[i].clone();
         // }
-        while num < 0 {
+        if num == 0 {
+            vec.push(0);
+            return vec;
+        }
+        while num > 0 {
             let piece = num % 10;
             vec.push(piece);
             num /= 10;
@@ -113,7 +117,7 @@ impl Helpers for Interpreter {
 
 
 pub trait Instructions {
-    fn cls(&mut self, screen: &mut Screen);                 // 00E0
+    fn cls(&mut self);                 // 00E0
     fn ret(&mut self);                                      // 00EE
     fn jp(&mut self, address: u16);                         // 1nnn
     fn jp_add(&mut self, address: u16);                     // Bnnn
@@ -144,9 +148,9 @@ pub trait Instructions {
     fn shr(&mut self, regx: usize);                         // 8xy6
     fn shl(&mut self, regx: usize);                         // 8xyE
     fn rnd(&mut self, regx: usize, byte: u8);               // Cxkk
-    fn drw(&mut self, regx: usize, regy: usize, sprite_height: u8, screen: &mut Screen);// Dxyn
-    fn skp(&mut self, regx: usize, input_driver: &Inputs, key: Option<Button>);  // Ex9E
-    fn sknp(&mut self, regx: usize, input_driver: &Inputs, key: Option<Button>); // ExA1
+    fn drw(&mut self, regx: usize, regy: usize, sprite_height: u8);// Dxyn
+    fn skp(&mut self, regx: usize);  // Ex9E
+    fn sknp(&mut self, regx: usize); // ExA1
 }
 
 
@@ -155,7 +159,6 @@ impl Instructions for Interpreter {
     fn addb(&mut self, regx: usize, byte: u8) {
         let regx_val = self.get_reg(regx);
         self.set_reg(regx, regx_val.wrapping_add(byte));
-        self.inc_pc();
     }
 
     /// Vx = Vx + Vy
@@ -164,7 +167,6 @@ impl Instructions for Interpreter {
         let result: u16 = self.get_reg(regx) as u16 + self.get_reg(regy) as u16;
         self.handle_vf(result > u8::MAX as u16);
         self.set_reg(regx, result as u8);
-        self.inc_pc();
     }
 
     /// I = Vx + I
@@ -172,7 +174,6 @@ impl Instructions for Interpreter {
         let i_val = self.get_i();
         let regx_val = self.get_reg(regx) as u16;
         self.set_i(i_val.wrapping_add(regx_val));
-        self.inc_pc();
     }
 
     /// Vx = Vx - Vy
@@ -182,7 +183,6 @@ impl Instructions for Interpreter {
         let regy_val = self.get_reg(regy);
         self.handle_vf(regx_val > regy_val);
         self.set_reg(regx, regx_val.wrapping_sub(regy_val));
-        self.inc_pc();
     }
 
     /// Vx = Vy - Vx
@@ -192,7 +192,6 @@ impl Instructions for Interpreter {
         let regy_val = self.get_reg(regy);
         self.handle_vf(regy_val > regx_val);
         self.set_reg(regx, regy_val.wrapping_sub(regx_val));
-        self.inc_pc();
     }
 
     /// Vx = Vx or Vy (bitwise)
@@ -200,7 +199,6 @@ impl Instructions for Interpreter {
         let regx_val = self.get_reg(regx);
         let regy_val = self.get_reg(regy);
         self.set_reg(regx, regx_val | regy_val);
-        self.inc_pc();
     }
 
     /// Vx = Vx and Vy (bitwise)
@@ -208,7 +206,6 @@ impl Instructions for Interpreter {
         let regx_val = self.get_reg(regx);
         let regy_val = self.get_reg(regy);
         self.set_reg(regx, regx_val & regy_val);
-        self.inc_pc();
     }
 
     /// Vx = Vx xor Vy (bitwise)
@@ -216,7 +213,6 @@ impl Instructions for Interpreter {
         let regx_val = self.get_reg(regx);
         let regy_val = self.get_reg(regy);
         self.set_reg(regx, regx_val ^ regy_val);
-        self.inc_pc();
     }
 
     /// Vx = Vx / 2
@@ -225,7 +221,6 @@ impl Instructions for Interpreter {
         let regx_val = self.get_reg(regx);
         self.handle_vf(regx_val & 0x1 == 1);
         self.set_reg(regx, regx_val >> 1);
-        self.inc_pc();
     }
 
     /// Vx = Vx * 2
@@ -234,7 +229,6 @@ impl Instructions for Interpreter {
         let regx_val = self.get_reg(regx);
         self.handle_vf(regx_val & 0x80 == 0x80);
         self.set_reg(regx, regx_val << 1);
-        self.inc_pc();
     }
 
     /// inc pc if Vx == byte
@@ -242,7 +236,6 @@ impl Instructions for Interpreter {
         if self.get_reg(regx) == byte {
             self.inc_pc();
         }
-        self.inc_pc();
     }
 
     /// inc pc if Vx != byte
@@ -250,7 +243,6 @@ impl Instructions for Interpreter {
         if self.get_reg(regx) != byte {
             self.inc_pc();
         }
-        self.inc_pc();
     }
 
     /// inc pc if Vx != Vy
@@ -260,7 +252,6 @@ impl Instructions for Interpreter {
         if regx_val != regy_val {
             self.inc_pc();
         }
-        self.inc_pc();
     }
 
     /// inc pc if Vx == Vy
@@ -270,54 +261,46 @@ impl Instructions for Interpreter {
         if regx_val == regy_val {
             self.inc_pc();
         }
-        self.inc_pc();
     }
 
     /// set Vx = byte
     fn ldb(&mut self, regx: usize, byte: u8) {
         self.set_reg(regx, byte);
-        self.inc_pc();
     }
 
     /// set Vx = Vy
     fn ld(&mut self, regx: usize, regy: usize) {
         let regy_val = self.get_reg(regy);
         self.set_reg(regx, regy_val);
-        self.inc_pc();
     }
 
     /// I = val
     fn ldi(&mut self, val: u16) {
         self.set_i(val);
-        self.inc_pc();
     }
 
     /// Vx = DT
     fn ldt(&mut self, regx: usize) {
         let dt_val = self.get_dt();
         self.set_reg(regx, dt_val);
-        self.inc_pc();
     }
 
     /// DT = Vx
     fn sdt(&mut self, regx: usize) {
         let regx_val = self.get_reg(regx);
         self.set_dt(regx_val);
-        self.inc_pc();
     }
 
     /// ST = Vx
     fn sst(&mut self, regx: usize) {
         let regx_val = self.get_reg(regx);
         self.set_st(regx_val);
-        self.inc_pc();
     }
 
     /// gen rand number [0...255]
     /// Vx = rand & byte
     fn rnd(&mut self, regx: usize, byte: u8) {
         self.set_reg(regx, rand::thread_rng().gen::<u8>() & byte);
-        self.inc_pc();
     }
 
     /// Wait for keypress and store value of key in Vx
@@ -325,31 +308,22 @@ impl Instructions for Interpreter {
         println!("waiting for key");
         self.wait_for_key = true;
         self.key_reg = regx;
-        self.inc_pc();
     }
 
     /// Inc pc if key value held in Vx is pressed
-    fn skp(&mut self, regx: usize, input_driver: &Inputs, key: Option<Button>) {
-        let key = input_driver.check_key_presses(key);
-        let target_key = self.get_reg(regx);
-        if key != None {
-            if target_key == key.unwrap() {
-                self.inc_pc();
-            }
+    fn skp(&mut self, regx: usize) {
+        let reg = self.get_reg(regx);
+        if self.keys[reg as usize] == 1 {
+            self.inc_pc();
         }
-        self.inc_pc();
     }
 
     /// Inc pc if key value held in Vx is not pressed
-    fn sknp(&mut self, regx: usize, input_driver: &Inputs, key: Option<Button>) {
-        let key = input_driver.check_key_presses(key);
-        let target_key = self.get_reg(regx);
-        if key != None {
-            if target_key == key.unwrap() {
-                self.inc_pc();
-            }
+    fn sknp(&mut self, regx: usize) {
+        let reg = self.get_reg(regx);
+        if self.keys[reg as usize] != 1 {
+            self.inc_pc();
         }
-        self.inc_pc();
     }
 
     /// Set PC = address
@@ -377,9 +351,10 @@ impl Instructions for Interpreter {
     }
 
     /// clear the screen
-    fn cls(&mut self, screen: &mut Screen) {
-        screen.clear_screen();
-        self.inc_pc();
+    fn cls(&mut self) {
+        for pix in self.screen.iter_mut() {
+            *pix = 0;
+        }
     }
 
     /// copy values of V0..V[limit_reg] into memory 
@@ -390,7 +365,6 @@ impl Instructions for Interpreter {
             let reg = self.get_reg(i);
             self.write_mem((mem_start + i) as usize, reg);
         }
-        self.inc_pc();
     }
 
     /// read values into V0..V[limit_reg] from
@@ -401,14 +375,12 @@ impl Instructions for Interpreter {
             let val = self.read_mem((mem_start + i) as usize);
             self.set_reg(i, val);
         }
-        self.inc_pc();
     }
 
     /// Load the location of a sprite into I
     fn ld_sprite(&mut self, regx: usize) {
         let loc = self.get_reg(regx) as u16;
         self.set_i(loc);
-        self.inc_pc();
     }
 
     /// Load BCD repr of Vx into memory locations
@@ -422,10 +394,9 @@ impl Instructions for Interpreter {
         for i in 0..=2 {
             self.write_mem((mem_loc + i) as usize, digits[i as usize] as u8)
         }
-        self.inc_pc();
     }
 
-    fn drw(&mut self, regx: usize, regy: usize, sprite_height: u8, screen: &mut Screen) {
+    fn drw(&mut self, regx: usize, regy: usize, sprite_height: u8) {
         self.unset_vf();
         let start = self.get_i() as usize;
         let mut sprite = Vec::new();
@@ -437,11 +408,9 @@ impl Instructions for Interpreter {
         let x = self.get_reg(regx) as usize;
         let y = self.get_reg(regy) as usize;
 
-        let coll = screen.draw_sprite(x, y, sprite);
-        if coll == 1 {
-            self.set_vf();
+        for (sy, byte) in sprite.iter().enumerate() {
+            let dy = (y + sy) %
         }
-        self.inc_pc();
     }
 }
 

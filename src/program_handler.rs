@@ -9,7 +9,7 @@ pub struct ProgramHandler {
 
 impl ProgramHandler {
     pub fn load_file_contents(&mut self, filename: &str) -> Vec<u8> {
-        let mut f = File::open(filename).unwrap();
+        let mut f = File::open(filename).expect("File does not exist");
 
         f.read_to_end(&mut self.file_contents);
 

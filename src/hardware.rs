@@ -38,6 +38,10 @@ impl Memory {
             self.memory[self.program_lower_bound + i] = program[i].clone();
         }
     }
+
+    pub fn get_max_rom_size(&self) -> usize {
+        return self.upper_bound - self.program_lower_bound;
+    }
 }
 
 impl Default for Memory {

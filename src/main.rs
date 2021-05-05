@@ -13,7 +13,6 @@ mod interpreter;
 mod program_handler;
 mod traits {
     pub mod instructions;
-    pub mod chip_8_interpreter;
 }
 mod drivers {
     pub mod input;
