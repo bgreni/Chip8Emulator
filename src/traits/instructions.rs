@@ -1,6 +1,8 @@
 use crate::interpreter::Interpreter;
-use crate::drivers::input::Inputs;
-use crate::drivers::screen::Screen;
+use crate::interpreter::SCREEN_WIDTH;
+use crate::interpreter::SCREEN_HEIGHT;
+use crate::interpreter::FONT_ADDR;
+use crate::interpreter::FONT_HEIGHT;
 use rand::Rng;
 use std::io;
 use std::io::stdin;
@@ -69,19 +71,19 @@ impl Helpers for Interpreter {
     }
 
     fn get_dt(&self) -> u8 {
-        return self.registers.dt;
+        return self.timer;
     }
 
     fn set_dt(&mut self, val: u8) {
-        self.registers.dt = val;
+        self.timer = val;
     }
 
     fn get_st(&self) -> u8 {
-        return self.registers.st;
+        return self.sound_timer;
     }
 
     fn set_st(&mut self, val: u8) {
-        self.registers.st = val;
+        self.sound_timer = val;
     }
 
     fn write_mem(&mut self, loc: usize, val: u8) {
@@ -281,20 +283,19 @@ impl Instructions for Interpreter {
 
     /// Vx = DT
     fn ldt(&mut self, regx: usize) {
-        let dt_val = self.get_dt();
-        self.set_reg(regx, dt_val);
+        self.set_reg(regx, self.timer);
     }
 
     /// DT = Vx
     fn sdt(&mut self, regx: usize) {
-        let regx_val = self.get_reg(regx);
-        self.set_dt(regx_val);
+        self.timer =  self.get_reg(regx);
+        self.t_tick = 1.0 / 60.0;
     }
 
     /// ST = Vx
     fn sst(&mut self, regx: usize) {
-        let regx_val = self.get_reg(regx);
-        self.set_st(regx_val);
+        self.sound_timer = self.get_reg(regx);
+        self.st_tick = 1.0 / 60.0;
     }
 
     /// gen rand number [0...255]
@@ -306,8 +307,7 @@ impl Instructions for Interpreter {
     /// Wait for keypress and store value of key in Vx
     fn ldk(&mut self, regx: usize) {
         println!("waiting for key");
-        self.wait_for_key = true;
-        self.key_reg = regx;
+        self.waiting_on_key = Some(regx as u8);
     }
 
     /// Inc pc if key value held in Vx is pressed
@@ -380,7 +380,7 @@ impl Instructions for Interpreter {
     /// Load the location of a sprite into I
     fn ld_sprite(&mut self, regx: usize) {
         let loc = self.get_reg(regx) as u16;
-        self.set_i(loc);
+        self.set_i((FONT_ADDR + loc as usize * FONT_HEIGHT) as u16);
     }
 
     /// Load BCD repr of Vx into memory locations
@@ -399,17 +399,22 @@ impl Instructions for Interpreter {
     fn drw(&mut self, regx: usize, regy: usize, sprite_height: u8) {
         self.unset_vf();
         let start = self.get_i() as usize;
-        let mut sprite = Vec::new();
-
-        for i in 0..sprite_height {
-            sprite.push(self.read_mem(start + 1) as u8);
-        }
+        let sprite = &self.memory.memory[start..start + sprite_height as usize];
 
         let x = self.get_reg(regx) as usize;
         let y = self.get_reg(regy) as usize;
 
         for (sy, byte) in sprite.iter().enumerate() {
-            let dy = (y + sy) %
+            let dy = (y + sy) % SCREEN_HEIGHT;
+            for sx in 0usize..8 {
+                let px = (*byte >> (7 - sx)) & 0b00000001;
+                let dx = (x + sx) % SCREEN_WIDTH;
+                let idx = dy * SCREEN_WIDTH + dx;
+                self.screen[idx] ^= px;
+                if (self.screen[idx] == 0 && px == 1) {
+                    self.registers.gen_regs[15] = 1;
+                }
+            }
         }
     }
 }
@@ -440,7 +445,7 @@ mod instruction_tests {
         let mut inter = get_inter();
         inter.set_reg(1, 8);
         inter.ld_sprite(1);
-        assert_eq!(inter.get_i(), 8);
+        assert_eq!(inter.get_i(),(FONT_ADDR +  8 * FONT_HEIGHT) as u16);
     }
 
     // tests for read_reg_mem

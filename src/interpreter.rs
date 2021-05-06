@@ -4,17 +4,19 @@
 use crate::hardware::{Registers, Memory};
 use crate::program_handler::ProgramHandler;
 use crate::traits::instructions::{Helpers, Instructions};
-use crate::drivers::screen::Screen;
-use crate::drivers::input::Inputs;
-use piston::input::Button;
+use std::slice::Chunks;
+
+// use crate::drivers::screen::Screen;
+// use crate::drivers::input::Inputs;
+// use piston::input::Button;
 
 const CLOCK_HZ: f32 = 600.0;
 
 const STACK_SIZE_LIMIT: i8 = 31;
 
-const FONT_ADDR: usize = 0;
+pub const FONT_ADDR: usize = 0;
 /// Number of rows in one font sprite
-const FONT_HEIGHT: usize = 5;
+pub const FONT_HEIGHT: usize = 5;
 /// Size of one font sprite
 const FONT_BYTES: usize = FONT_HEIGHT * 16;
 /// Data of the built-in font
@@ -38,11 +40,11 @@ const FONT: [u8; FONT_BYTES] = [
 ];
 
 /// Width of the screen in pixels
-const SCREEN_WIDTH: usize = 64;
+pub const SCREEN_WIDTH: usize = 64;
 /// Height of the screen in pixels
-const SCREEN_HEIGHT: usize = 32;
+pub const SCREEN_HEIGHT: usize = 32;
 /// Total number of pixels of the screen
-const SCREEN_PIXELS: usize = SCREEN_WIDTH * SCREEN_HEIGHT;
+pub const SCREEN_PIXELS: usize = SCREEN_WIDTH * SCREEN_HEIGHT;
 
 /// Number of keys on the keypad
 const NUM_KEYS: usize = 16;
@@ -51,17 +53,17 @@ const NUM_KEYS: usize = 16;
 pub struct Interpreter {
     pub registers: Registers,
     pub memory: Memory,
-    pub wait_for_key: bool,
     pub key_reg: usize,
     pub program_handler: ProgramHandler,
     pub next_op: u16,
-    timer: u8,
-    t_tick: f32,
-    sound_timer: u8,
-    st_tick: f32,
+    pub timer: u8,
+    pub t_tick: f32,
+    pub sound_timer: u8,
+    pub st_tick: f32,
 
     pub screen: [u8; SCREEN_PIXELS],
     pub keys: [u8; NUM_KEYS],
+    pub waiting_on_key: Option<u8>,
 }
 
 
@@ -70,7 +72,6 @@ impl Interpreter {
         let mut inter = Interpreter {
             registers: Registers::default(),
             memory: Memory::default(),
-            wait_for_key: false,
             key_reg: 0,
             program_handler: ProgramHandler::new(),
             next_op: 0,
@@ -81,10 +82,27 @@ impl Interpreter {
 
             screen: [0; SCREEN_PIXELS],
             keys: [0; NUM_KEYS],
+            waiting_on_key: None,
         };
 
         inter.load_font();
         return inter;
+    }
+
+    pub fn set_key(&mut self, idx: u8) {
+        // debug!("Set key {}", idx);
+        self.keys[idx as usize] = 1;
+        if let Some(vx) = self.waiting_on_key {
+            // debug!("No longer waiting on key");
+            self.set_reg(vx as usize, idx);
+            self.waiting_on_key = None;
+        }
+    }
+
+    /// Marks they key with index `idx` as being unset
+    pub fn unset_key(&mut self, idx: u8) {
+        // debug!("Unset key {}", idx);
+        self.keys[idx as usize] = 0;
     }
 
     fn load_font(&mut self) {
@@ -112,6 +130,10 @@ impl Interpreter {
         }
     }
 
+    pub fn is_beeping(&self) -> bool {
+        return self.timer > 0;
+    }
+
     fn time_step(&mut self, dt: f32) {
         if self.timer > 0 {
             self.t_tick -= dt;
@@ -129,26 +151,29 @@ impl Interpreter {
         }
     }
 
-    pub fn step(&mut self, dt: f32, input: &mut Inputs, key: Option<Button>) {
+    pub fn step(&mut self, dt: f32) {
         let sub_steps = (CLOCK_HZ * dt).round() as usize;
         let ddt = dt / sub_steps as f32;
 
         for step in 0..sub_steps {
             self.time_step(ddt);
-            if self.wait_for_key {
+            if self.waiting_on_key.is_some() {
                 return;
             }
 
             self.fetch_next_instruction();
-            self.run_op(screen, input, key);
+            println!("{:?}", self.next_op);
+            self.run_op();
+            self.inc_pc();
         }
 
     }
 
-    fn load_program(&mut self, filename: &str) {
+    pub fn load_program(&mut self, filename: &str) {
         let content = self.program_handler.load_file_contents(filename);
         if (content.len() > self.memory.get_max_rom_size()) {
-            panic!("ROM size ({}) is larger than available RAM ({})!", rom_len, available_ram);
+            // panic!("ROM size ({}) is larger than available RAM ({})!", rom_len, available_ram);
+            panic!("ROM too big");
         }
         self.memory.load_program(content);
     }
@@ -163,7 +188,7 @@ impl Interpreter {
         panic!("Unrecongized instruction {:#06x}", self.next_op)
     }
 
-    fn run_op(&mut self, input: &mut Inputs, key: Option<Button>) {
+    fn run_op(&mut self) {
         let nnn = self.next_op & 0x0FFF;
         let nn = (self.next_op & 0x0FF) as u8;
         let n = (self.next_op & 0x00F) as u8;
@@ -172,7 +197,7 @@ impl Interpreter {
         match (self.next_op & 0xF000) >> 12 {
             0x0 => {
                 match nn {
-                    0xE0 => self.cls(screen),
+                    0xE0 => self.cls(),
                     0xEE => self.ret(),
                     _ => {self.cry()}
                 }
@@ -188,11 +213,11 @@ impl Interpreter {
             0xa => self.ldi(nnn),
             0x7 => self.addb(x, nn),
             0xc => self.rnd(x, nn),
-            0xd => self.drw(x, y, n, screen),
+            0xd => self.drw(x, y, n),
             0xe => {
                 match nn {
-                    0x9e => self.skp(x, input, key),
-                    0xa1 => self.sknp(x, input, key),
+                    0x9e => self.skp(x),
+                    0xa1 => self.sknp(x),
                     _ => {self.cry()}
                 }
             }
@@ -227,6 +252,10 @@ impl Interpreter {
 
             _ => {self.cry()}
         }
+    }
+
+    pub fn screen_rows<'a>(&'a self) -> Chunks<'a, u8> {
+        self.screen.chunks(SCREEN_WIDTH)
     }
 }
 
