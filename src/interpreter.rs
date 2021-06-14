@@ -190,8 +190,8 @@ impl Interpreter {
 
     fn run_op(&mut self) {
         let nnn = self.next_op & 0x0FFF;
-        let nn = (self.next_op & 0x0FF) as u8;
-        let n = (self.next_op & 0x00F) as u8;
+        let nn = (self.next_op & 0x00FF) as u8;
+        let n = (self.next_op & 0x000F) as u8;
         let x = ((self.next_op & 0x0F00) >> 8) as usize;
         let y = ((self.next_op & 0x00F0) >> 4) as usize;
         match (self.next_op & 0xF000) >> 12 {
