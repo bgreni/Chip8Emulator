@@ -4,9 +4,15 @@ Chip 8 emulator I used as both an introduction to Rust and writting emulators!
 ![alt text](SpaceInvaders.png)
 
 ## Usage
-```
-cargo run <path/to/rom>
-```
+1. Install SDL2 (Can be done on MacOS using Homebrew `brew install sdl2`)
+2. Install binary using cargo
+    ```
+    cargo install chip8-rs
+    ```
+3. Download a chip8 rom and play it!
+    ```
+    chip8-rs <path/to/rom>
+    ```
 
 ## TODO
 Beeping
