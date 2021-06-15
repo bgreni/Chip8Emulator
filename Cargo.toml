@@ -1,16 +1,18 @@
 [package]
-name = "chip8emulator"
+name = "chip8-rs"
 version = "0.1.0"
 authors = ["bgreni <grenierb96@gmail.com>"]
 edition = "2018"
+license = "MIT"
+repository = "https://github.com/bgreni/Chip8Emulator"
+readme = "README.md"
+keywords = ["chip8", "emulator"]
+categories = ["chip8", "emulator"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-piston = "*"
-piston2d-opengl_graphics = "*"
-piston2d-graphics = "*"
-pistoncore-sdl2_window = "*"
-piston_window = "*"
-rand = "*"
-core-graphics = "*"
+sdl2 = "0.34.5"
+bit-vec = "0.6.3"
+clap = "*"
+rand = "0.8.3"
